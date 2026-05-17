@@ -11,6 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Modyfikacja MichalWerszner 2026:
+#   word_from_hex_str → modbus::helpers::word_from_hex_str (deprecated od 2026.10)
 
 sensor:
   - platform: modbus_controller
@@ -127,7 +130,6 @@ sensor:
     filters:
       - multiply: 0.1
     value_type: U_DWORD_R
-
     icon: "mdi:flash"
 
   - platform: modbus_controller
@@ -139,17 +141,12 @@ sensor:
     accuracy_decimals: 0
     value_type: U_WORD
     icon: "mdi:solar-panel"
-
     entity_category: diagnostic
     filters:
       - lambda: |-
           uint16_t value = (uint16_t)x;
-          // Extract upper nibble (bits 8-11) and shift right 8 bits
           uint16_t mppts = (value >> 8) & 0x0F;
-          // Validation: if value exceeds 12 MPPTs, use default of 2
-          if (mppts < 1 || mppts > 12) {
-            return 2.0;
-          }
+          if (mppts < 1 || mppts > 12) { return 2.0; }
           return (float)mppts;
 
   - platform: modbus_controller
@@ -161,17 +158,12 @@ sensor:
     accuracy_decimals: 0
     value_type: U_WORD
     icon: "mdi:transmission-tower"
-
     entity_category: diagnostic
     filters:
       - lambda: |-
           uint16_t value = (uint16_t)x;
-          // Extract lower nibble (bits 0-3)
           uint16_t phases = value & 0x0F;
-          // Validation: if value exceeds 3 phases, use default of 3
-          if (phases < 1 || phases > 3) {
-            return 3.0;
-          }
+          if (phases < 1 || phases > 3) { return 3.0; }
           return (float)phases;
 
   - platform: modbus_controller
@@ -248,25 +240,16 @@ text_sensor:
     icon: "mdi:alert-decagram"
     entity_category: diagnostic
     lambda: |-
-      if (x.size() != 8) {
-        return std::string("invalid data");
-      }
-
-      // Assemble words without rotating bytes within words
+      if (x.size() != 8) { return std::string("invalid data"); }
       uint16_t word0 = ((uint16_t)(uint8_t)x[0] << 8) | (uint8_t)x[1];
       uint16_t word1 = ((uint16_t)(uint8_t)x[2] << 8) | (uint8_t)x[3];
       uint16_t word2 = ((uint16_t)(uint8_t)x[4] << 8) | (uint8_t)x[5];
       uint16_t word3 = ((uint16_t)(uint8_t)x[6] << 8) | (uint8_t)x[7];
-
-      // Assemble uint64_t value; words are in little-endian order
-      uint64_t value = ((uint64_t)word3 << 48) |
-                      ((uint64_t)word2 << 32) |
-                      ((uint64_t)word1 << 16) |
-                      word0;
-
+      uint64_t value = ((uint64_t)word3 << 48) | ((uint64_t)word2 << 32) |
+                       ((uint64_t)word1 << 16) | word0;
       switch (value) {
         case 0: return std::string("OK");
-        case (1ULL << 1): return std::string("F02");         
+        case (1ULL << 1): return std::string("F02");
         case (1ULL << 2): return std::string("F03");
         case (1ULL << 3): return std::string("F04");
         case (1ULL << 4): return std::string("F05");
@@ -329,8 +312,7 @@ text_sensor:
         case (1ULL << 61): return std::string("F62");
         case (1ULL << 62): return std::string("F63");
         case (1ULL << 63): return std::string("F64");
-        default:
-        return std::string("?");
+        default: return std::string("?");
       }
 
   - platform: modbus_controller
@@ -342,7 +324,7 @@ text_sensor:
     name: "Running Status"
     icon: "mdi:play-circle"
     lambda: |-
-      uint16_t value = modbus_controller::word_from_hex_str(x, 0);
+      uint16_t value = modbus::helpers::word_from_hex_str(x, 0);
       switch (value) {
         case 0: return std::string("standby");
         case 1: return std::string("selfcheck");
@@ -362,28 +344,24 @@ text_sensor:
       auto raw1 = (uint16_t)id(inverter_datetime_raw1).state;
       auto raw2 = (uint16_t)id(inverter_datetime_raw2).state;
       auto raw3 = (uint16_t)id(inverter_datetime_raw3).state;
-
-      if (isnan(id(inverter_datetime_raw1).state) || 
-          isnan(id(inverter_datetime_raw2).state) || 
+      if (isnan(id(inverter_datetime_raw1).state) ||
+          isnan(id(inverter_datetime_raw2).state) ||
           isnan(id(inverter_datetime_raw3).state)) {
         return {"N/A"};
       }
-
       int year = 2000 + ((raw1 >> 8) & 0xFF);
       int month = raw1 & 0xFF;
       int day = (raw2 >> 8) & 0xFF;
       int hour = raw2 & 0xFF;
       int minute = (raw3 >> 8) & 0xFF;
       int second = raw3 & 0xFF;
-
-      if (month < 1 || month > 12 || day < 1 || day > 31 || 
+      if (month < 1 || month > 12 || day < 1 || day > 31 ||
           hour > 23 || minute > 59 || second > 59) {
         return {"Invalid"};
       }
-
       char buffer[20];
-      snprintf(buffer, sizeof(buffer), "%04d-%02d-%02d %02d:%02d:%02d", 
-              year, month, day, hour, minute, second);
+      snprintf(buffer, sizeof(buffer), "%04d-%02d-%02d %02d:%02d:%02d",
+        year, month, day, hour, minute, second);
       return {buffer};
 
   - platform: modbus_controller
@@ -393,11 +371,10 @@ text_sensor:
     address: 0
     bitmask: 0
     raw_encode: HEXBYTES
-
     icon: "mdi:chip"
     entity_category: diagnostic
     lambda: |-
-      uint16_t value = modbus_controller::word_from_hex_str(x, 0);
+      uint16_t value = modbus::helpers::word_from_hex_str(x, 0);
       switch (value) {
         case 0x0000: return std::string("Unknown");
         case 0x0002:
@@ -423,7 +400,6 @@ text_sensor:
     address: 2
     bitmask: 0
     raw_encode: NONE
-
     icon: "mdi:protocol"
     entity_category: diagnostic
     lambda: |-
@@ -441,13 +417,11 @@ text_sensor:
     response_size: 10
     bitmask: 0
     raw_encode: NONE
-
     icon: "mdi:barcode"
     entity_category: diagnostic
     lambda: |-
       if (x.size() < 10) return std::string("N/A");
       std::string serial;
-
       for (int i = 0; i < 10; i += 2) {
         char high = x[i];
         char low = x[i + 1];
@@ -463,7 +437,6 @@ text_sensor:
     address: 10
     bitmask: 0
     raw_encode: NONE
-
     icon: "mdi:memory"
     entity_category: diagnostic
     lambda: |-
@@ -480,7 +453,6 @@ text_sensor:
     address: 12
     bitmask: 0
     raw_encode: NONE
-
     icon: "mdi:chip"
     entity_category: diagnostic
     lambda: |-
@@ -497,7 +469,6 @@ text_sensor:
     address: 13
     bitmask: 0
     raw_encode: NONE
-
     icon: "mdi:chip"
     entity_category: diagnostic
     lambda: |-
@@ -517,7 +488,7 @@ text_sensor:
     icon: "mdi:check-circle"
     entity_category: diagnostic
     lambda: |-
-      uint16_t value = modbus_controller::word_from_hex_str(x, 0);
+      uint16_t value = modbus::helpers::word_from_hex_str(x, 0);
       switch (value) {
         case 0x0000: return std::string("Disabled");
         case 0x0001: return std::string("Enabled");
@@ -533,13 +504,11 @@ text_sensor:
       auto reg14 = (uint16_t)id(device_firmware_raw_14).state;
       auto reg15 = (uint16_t)id(device_firmware_raw_15).state;
       auto reg11 = (uint16_t)id(device_firmware_raw_11).state;
-
-      if (isnan(id(device_firmware_raw_14).state) || 
-          isnan(id(device_firmware_raw_15).state) || 
+      if (isnan(id(device_firmware_raw_14).state) ||
+          isnan(id(device_firmware_raw_15).state) ||
           isnan(id(device_firmware_raw_11).state)) {
         return {"N/A"};
       }
-
       char buffer[50];
       snprintf(buffer, sizeof(buffer), "%04X-%04X-%04X", reg14, reg15, reg11);
       return {buffer};
@@ -553,13 +522,11 @@ text_sensor:
       auto reg17 = (uint16_t)id(device_comm_firmware_raw_17).state;
       auto reg18 = (uint16_t)id(device_comm_firmware_raw_18).state;
       auto reg16 = (uint16_t)id(device_comm_firmware_raw_16).state;
-
-      if (isnan(id(device_comm_firmware_raw_17).state) || 
-          isnan(id(device_comm_firmware_raw_18).state) || 
+      if (isnan(id(device_comm_firmware_raw_17).state) ||
+          isnan(id(device_comm_firmware_raw_18).state) ||
           isnan(id(device_comm_firmware_raw_16).state)) {
         return {"N/A"};
       }
-
       char buffer[50];
       if (reg16 == 0) {
         snprintf(buffer, sizeof(buffer), "%04X-%04X", reg17, reg18);
@@ -578,7 +545,7 @@ text_sensor:
     raw_encode: HEXBYTES
     icon: "mdi:directions-fork"
     lambda: |-
-      uint16_t value = modbus_controller::word_from_hex_str(x, 0);
+      uint16_t value = modbus::helpers::word_from_hex_str(x, 0);
       switch (value) {
         case 0x0000: return std::string("Off");
         case 0x0001:
@@ -609,19 +576,15 @@ text_sensor:
     icon: "mdi:alert-outline"
     lambda: |-
       if (x.size() < 4) return std::string("N/A");
-
       uint16_t word1 = ((uint16_t)(uint8_t)x[0] << 8) | (uint8_t)x[1];
       uint16_t word2 = ((uint16_t)(uint8_t)x[2] << 8) | (uint8_t)x[3];
       uint32_t value = ((uint32_t)word2 << 16) | word1;
-
       if (value == 0) return std::string("OK");
-
-      if (value & (1UL << 1)) return std::string("Fan failure");
-      if (value & (1UL << 2)) return std::string("Grid phase failure");
-      if (value & (1UL << 3)) return std::string("Meter communication failure");
+      if (value & (1UL << 1))  return std::string("Fan failure");
+      if (value & (1UL << 2))  return std::string("Grid phase failure");
+      if (value & (1UL << 3))  return std::string("Meter communication failure");
       if (value & (1UL << 30)) return std::string("Battery loss");
       if (value & (1UL << 31)) return std::string("Parallel communication quality");
-
       return std::string("Error");
 
   - platform: modbus_controller
@@ -636,26 +599,21 @@ text_sensor:
     icon: "mdi:message-alert-outline"
     lambda: |-
       if (x.size() < 8) return std::string("N/A");
-
       uint16_t word1 = ((uint16_t)(uint8_t)x[0] << 8) | (uint8_t)x[1];
       uint16_t word2 = ((uint16_t)(uint8_t)x[2] << 8) | (uint8_t)x[3];
       uint16_t word3 = ((uint16_t)(uint8_t)x[4] << 8) | (uint8_t)x[5];
       uint16_t word4 = ((uint16_t)(uint8_t)x[6] << 8) | (uint8_t)x[7];
-
-      uint64_t value = ((uint64_t)word4 << 48) | ((uint64_t)word3 << 32) | 
-                      ((uint64_t)word2 << 16) | word1;
-
+      uint64_t value = ((uint64_t)word4 << 48) | ((uint64_t)word3 << 32) |
+                       ((uint64_t)word2 << 16) | word1;
       if (value == 0) return std::string("OK");
-
-      if (value & (1ULL << 6)) return std::string("DC/DC Soft Start failure");
-      if (value & (1ULL << 9)) return std::string("Auxiliary power supply failure");
+      if (value & (1ULL << 6))  return std::string("DC/DC Soft Start failure");
+      if (value & (1ULL << 9))  return std::string("Auxiliary power supply failure");
       if (value & (1ULL << 12)) return std::string("Working mode changed");
       if (value & (1ULL << 17)) return std::string("AC Over-current failure");
       if (value & (1ULL << 18)) return std::string("Tz_Integ_Fault failure");
       if (value & (1ULL << 19)) return std::string("DC Over-current failure");
       if (value & (1ULL << 22)) return std::string("AC current leakage failure");
       if (value & (1ULL << 63)) return std::string("Temperature is too high");
-
       return std::string("Error");
 
 number:
